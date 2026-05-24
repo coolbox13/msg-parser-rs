@@ -3,6 +3,8 @@ Outlook Email Message (.msg) parser
 ![CI](https://github.com/marirs/msg-parser-rs/actions/workflows/ci.yml/badge.svg)
 ![Crates.io](https://img.shields.io/crates/v/msg_parser)
 ![docs.rs](https://img.shields.io/docsrs/msg_parser)
+![Crates.io Total Downloads](https://img.shields.io/crates/d/msg_parser)
+
 
 A parser for Microsoft Outlook `.msg` files (OLE Compound Document format).
 Extracts message metadata, body content, recipients, attachments, and transport
