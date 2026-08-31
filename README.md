@@ -247,7 +247,7 @@ parse time compared to the generic `from_reader` path.
 
 ### Requirements
 
-- Rust edition 2024 (rustc 1.85+)
+- Rust edition 2024 (rustc 1.85+; project uses stable, currently 1.98)
 
 ### Running the example
 

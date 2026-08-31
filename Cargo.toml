@@ -10,6 +10,7 @@ keywords = ["msg", "mail", "ole", "outlook", "parser"]
 repository = "https://github.com/marirs/msg-parser-rs"
 homepage = "https://github.com/marirs/msg-parser-rs"
 edition = "2024"
+rust-version = "1.85"
 
 [dependencies]
 hex = { version = "0.4", features = ["serde"] }
