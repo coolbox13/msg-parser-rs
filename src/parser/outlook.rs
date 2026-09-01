@@ -39,14 +39,18 @@ fn base64_encode(data: &[u8]) -> String {
 type Name = String;
 type Email = String;
 
-static RE_CONTENT_TYPE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?im)^Content-Type: (.*(\n\s.*)*)\r\n").unwrap());
+// Accept CRLF or LF line endings, and RFC 5322 folded values that start on the
+// next line (e.g. `Message-ID:\r\n\t<id@host>`).
+static RE_CONTENT_TYPE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?im)^Content-Type:\s*(.*(?:\r?\n[ \t].*)*)(?:\r?\n|$)").unwrap()
+});
 static RE_DATE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)Date: (.*(\n\s.*)*)\r\n").unwrap());
-static RE_MESSAGE_ID: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?im)^Message-ID: (.*(\n\s.*)*)\r\n").unwrap());
+    LazyLock::new(|| Regex::new(r"(?im)^Date:\s*(.*(?:\r?\n[ \t].*)*)(?:\r?\n|$)").unwrap());
+static RE_MESSAGE_ID: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?im)^Message-ID:\s*(.*(?:\r?\n[ \t].*)*)(?:\r?\n|$)").unwrap()
+});
 static RE_REPLY_TO: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?im)^Reply-To: (.*(\n\s.*)*)\r\n").unwrap());
+    LazyLock::new(|| Regex::new(r"(?im)^Reply-To:\s*(.*(?:\r?\n[ \t].*)*)(?:\r?\n|$)").unwrap());
 
 /// SMTP transport headers from the message envelope.
 ///
@@ -74,7 +78,17 @@ impl TransportHeaders {
             return String::new();
         }
         re.captures(text)
-            .and_then(|cap| cap.get(1).map(|x| String::from(x.as_str())))
+            .and_then(|cap| {
+                cap.get(1).map(|x| {
+                    // Unfold RFC 5322 continuation lines into a single value.
+                    x.as_str()
+                        .split(['\r', '\n'])
+                        .map(str::trim)
+                        .filter(|part| !part.is_empty())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
+            })
             .unwrap_or_default()
     }
 
@@ -701,6 +715,53 @@ mod tests {
         assert!(header.date.is_empty());
         assert!(header.message_id.is_empty());
         assert!(header.reply_to.is_empty());
+    }
+
+    #[test]
+    fn test_transport_headers_folded_message_id() {
+        // Outlook often folds Message-ID onto the next line after the colon.
+        let text = "Date: Sun, 14 Mar 2021 03:34:25 +0000\r\n\
+Message-ID:\r\n\
+\t<PSAPR02MB4837B16144ECEDB641FCDE04FD6D9@PSAPR02MB4837.apcprd02.prod.outlook.com>\r\n\
+Content-Type: multipart/mixed;\r\n\
+\tboundary=\"_006_example_\"\r\n\
+Reply-To: someone@example.com\r\n";
+        let header = TransportHeaders::create_from_headers_text(text);
+        assert_eq!(header.date, "Sun, 14 Mar 2021 03:34:25 +0000");
+        assert_eq!(
+            header.message_id,
+            "<PSAPR02MB4837B16144ECEDB641FCDE04FD6D9@PSAPR02MB4837.apcprd02.prod.outlook.com>"
+        );
+        assert!(header.content_type.contains("multipart/mixed"));
+        assert!(header.content_type.contains("boundary=\"_006_example_\""));
+        assert_eq!(header.reply_to, "someone@example.com");
+    }
+
+    #[test]
+    fn test_transport_headers_lf_only_line_endings() {
+        let text = "Date: Mon, 18 Nov 2013 10:26:24 +0200\n\
+Message-ID: <id@example.com>\n\
+Content-Type: text/plain; charset=utf-8\n\
+Reply-To: reply@example.com\n";
+        let header = TransportHeaders::create_from_headers_text(text);
+        assert_eq!(header.date, "Mon, 18 Nov 2013 10:26:24 +0200");
+        assert_eq!(header.message_id, "<id@example.com>");
+        assert_eq!(header.content_type, "text/plain; charset=utf-8");
+        assert_eq!(header.reply_to, "reply@example.com");
+    }
+
+    #[test]
+    fn test_transport_headers_from_test_email_1_file() {
+        let outlook = Outlook::from_path("data/test_email_1.msg").unwrap();
+        assert!(!outlook.headers.raw.is_empty());
+        assert!(!outlook.headers.date.is_empty());
+        assert!(!outlook.headers.content_type.is_empty());
+        // Previously failed: Message-ID value is folded onto the next line.
+        assert!(
+            outlook.headers.message_id.contains('@'),
+            "expected Message-ID, got {:?}",
+            outlook.headers.message_id
+        );
     }
 
     #[test]

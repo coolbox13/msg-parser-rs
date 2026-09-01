@@ -247,15 +247,44 @@ parse time compared to the generic `from_reader` path.
 
 ### Requirements
 
-- Rust edition 2024 (rustc 1.85+; project uses stable, currently 1.98)
+- Rust edition 2024 (rustc 1.85+; project uses stable via `rust-toolchain.toml`)
 
-### Running the example
+### Running the examples
+
+Parse and print a summary of a `.msg` file:
 
 ```bash
 cargo run --example parse-email
 # or with a specific file:
 cargo run --example parse-email -- path/to/email.msg
 ```
+
+#### Batch convert `.msg` → PDF (combined email + attachments)
+
+`msg_parser` itself only **parses** `.msg` files — it does not render PDFs.
+The `convert-bonnen` example builds one **combined PDF per message**:
+
+1. A summary page (from / to / subject / date / body / attachment list)
+2. One page per image attachment (receipt photos, etc.), scaled to A4
+
+```bash
+# Build once
+cargo build --release --example convert-bonnen
+
+# Convert every .msg in an input folder into an output folder
+./target/release/examples/convert-bonnen path/to/msgs path/to/output
+
+# Defaults: bonnen → bonnen/converted
+./target/release/examples/convert-bonnen
+```
+
+Each message produces:
+
+- `{name}.pdf` — combined document
+- `{name}/` — extracted attachment files (original JPG/PNG/…)
+
+PDF rendering uses the optional `printpdf` **dev-dependency** (not required when
+using `msg_parser` as a library).
 
 ### Running tests
 
